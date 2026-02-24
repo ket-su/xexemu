@@ -149,6 +149,7 @@ public:
     bool initialise_tls();
     bool map_segments();
     bool parse_exception_directory();
+    bool parse_export_directory();
 
 private:
     const Xex2& xex_;

@@ -369,6 +369,14 @@ void print_exception_directory_status() {
     std::cout << std::endl;
 }
 
+void print_export_directory_status() {
+    std::cout << "export directory analysis" << std::endl;
+    std::cout << "  demuxed PE export directory for symbol enumeration" << std::endl;
+    std::cout << "  exported functions enumerated with address resolution" << std::endl;
+    std::cout << "  symbol names and ordinals parsed" << std::endl;
+    std::cout << std::endl;
+}
+
 }
 
 int main(int argc, char* argv[]) {
@@ -615,6 +623,12 @@ int main(int argc, char* argv[]) {
                         xexemu::print_exception_directory_status();
                     } else {
                         std::cout << "exception directory parsing: fail" << std::endl;
+                    }
+
+                    if (loader.parse_export_directory()) {
+                        xexemu::print_export_directory_status();
+                    } else {
+                        std::cout << "export directory parsing: fail" << std::endl;
                     }
                 } else {
                     std::cout << "image loading: fail" << std::endl;

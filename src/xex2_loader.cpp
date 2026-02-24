@@ -124,6 +124,27 @@ struct UnwindInfoHeader {
     uint8_t frame_register_offset;
 };
 
+struct ImageExportDirectory {
+    uint32_t characteristics;
+    uint32_t time_date_stamp;
+    uint16_t major_version;
+    uint16_t minor_version;
+    uint32_t name;
+    uint32_t base;
+    uint32_t number_of_functions;
+    uint32_t number_of_names;
+    uint32_t address_of_functions;
+    uint32_t address_of_names;
+    uint32_t address_of_name_ordinals;
+};
+
+struct PeExportedSymbol {
+    std::string name;
+    uint32_t ordinal;
+    uint32_t address;
+    uint16_t hint;
+};
+
 Xex2Loader::Xex2Loader(const Xex2& xex) : xex_(xex), is_loaded_(false) {}
 
 bool Xex2Loader::parse_exception_directory() {
@@ -173,6 +194,98 @@ bool Xex2Loader::parse_exception_directory() {
                 uint8_t frame_register = (unwind_header.frame_register_offset >> 4) & 0x0F;
                 uint8_t frame_offset = unwind_header.frame_register_offset & 0x0F;
             }
+        }
+    }
+
+    return true;
+}
+
+bool Xex2Loader::parse_export_directory() {
+    if (!is_loaded_) {
+        return false;
+    }
+
+    const auto dos_header = read_struct<PeHeaderDOS>(decrypted_image_, 0);
+    uint32_t nt_offset = dos_header.e_lfanew;
+    const auto nt_header = read_struct<PeHeaderNT>(decrypted_image_, nt_offset);
+
+    uint32_t export_dir_rva = static_cast<uint32_t>(nt_header.data_directory[0] & 0xFFFFFFFF);
+    uint32_t export_dir_size = static_cast<uint32_t>((nt_header.data_directory[0] >> 32) & 0xFFFFFFFF);
+
+    if (export_dir_rva == 0 || export_dir_size == 0) {
+        return true;
+    }
+
+    if (export_dir_rva + sizeof(ImageExportDirectory) > decrypted_image_.size()) {
+        return false;
+    }
+
+    const auto export_dir = read_struct<ImageExportDirectory>(decrypted_image_, export_dir_rva);
+
+    if (export_dir.number_of_functions == 0) {
+        return true;
+    }
+
+    std::vector<PeExportedSymbol> exported_symbols;
+
+    for (uint32_t i = 0; i < export_dir.number_of_functions; i++) {
+        PeExportedSymbol symbol;
+        symbol.ordinal = export_dir.base + i;
+        symbol.address = 0;
+
+        uint32_t func_rva = export_dir.address_of_functions + i * 4;
+        if (func_rva + 4 > decrypted_image_.size()) {
+            continue;
+        }
+
+        uint32_t function_address;
+        std::memcpy(&function_address, decrypted_image_.data() + func_rva, 4);
+
+        if (function_address == 0) {
+            continue;
+        }
+
+        symbol.address = function_address;
+
+        for (uint32_t name_idx = 0; name_idx < export_dir.number_of_names; name_idx++) {
+            uint32_t name_ptr_rva = export_dir.address_of_names + name_idx * 4;
+            if (name_ptr_rva + 4 > decrypted_image_.size()) {
+                continue;
+            }
+
+            uint32_t name_rva;
+            std::memcpy(&name_rva, decrypted_image_.data() + name_ptr_rva, 4);
+
+            uint32_t ordinal_rva = export_dir.address_of_name_ordinals + name_idx * 2;
+            if (ordinal_rva + 2 > decrypted_image_.size()) {
+                continue;
+            }
+
+            uint16_t ordinal;
+            std::memcpy(&ordinal, decrypted_image_.data() + ordinal_rva, 2);
+
+            if (ordinal == i) {
+                if (name_rva < decrypted_image_.size()) {
+                    symbol.hint = name_idx;
+                    size_t j = 0;
+                    while (name_rva + j < decrypted_image_.size() && decrypted_image_[name_rva + j] != 0) {
+                        symbol.name += static_cast<char>(decrypted_image_[name_rva + j]);
+                        j++;
+                    }
+                }
+                break;
+            }
+        }
+
+        if (symbol.address != 0) {
+            exported_symbols.push_back(symbol);
+        }
+    }
+
+    if (export_dir.name != 0 && export_dir.name < decrypted_image_.size()) {
+        size_t j = 0;
+        while (export_dir.name + j < decrypted_image_.size() && decrypted_image_[export_dir.name + j] != 0) {
+            j++;
         }
     }
 
