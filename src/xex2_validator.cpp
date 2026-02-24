@@ -1,4 +1,5 @@
 #include "xex2.h"
+#include "xex2_exceptions.h"
 #include <cstring>
 #include <memory>
 #include <fstream>
@@ -130,29 +131,34 @@ bool Xex2Validator::verify_hypervisor_signature() const {
     signed_data.resize(xex_.header.header_size);
 
     std::ifstream file(xex_.filepath_, std::ios::binary);
-    if (file) {
-        file.seekg(0);
-        file.read(reinterpret_cast<char*>(signed_data.data()), xex_.header.header_size);
+    if (!file) {
+        throw FileOpenException(xex_.filepath_, "cannot open XEX file for signature verification");
+    }
+    file.seekg(0);
+    file.read(reinterpret_cast<char*>(signed_data.data()), xex_.header.header_size);
+
+    if (!CryptoUtils::verify_rsa_signature(signed_data, signature, key)) {
+        throw SignatureVerificationException("RSA signature does not match signed data");
     }
 
-    return CryptoUtils::verify_rsa_signature(signed_data, signature, key);
+    return true;
 }
 
 bool Xex2Validator::verify_kernel_load_checks() const {
     if (xex_.certificate.minimum_version > 0 && xex_.certificate.maximum_version > 0) {
         uint32_t system_version = 17559;
         if (system_version < xex_.certificate.minimum_version || system_version > xex_.certificate.maximum_version) {
-            return false;
+            throw VersionRestrictionException(xex_.certificate.minimum_version, xex_.certificate.maximum_version, system_version);
         }
     }
 
     if (xex_.certificate.platform != 0) {
-        return false;
+        throw CertificateValidationException("platform", "platform must be 0x0000");
     }
 
     uint32_t allowed_media = xex_.certificate.allowed_media;
     if ((allowed_media & 0x01) == 0 && (allowed_media & 0x02) == 0) {
-        return false;
+        throw MediaRestrictionException(allowed_media);
     }
 
     if (xex_.is_encrypted) {
@@ -175,23 +181,23 @@ bool Xex2Validator::verify_kernel_load_checks() const {
 
 bool Xex2Validator::verify_certificate_chain() const {
     if (xex_.certificate.size < 288) {
-        return false;
+        throw CertificateValidationException("size", "certificate size " + std::to_string(xex_.certificate.size) + " is below minimum 288 bytes");
     }
 
     if (xex_.certificate.certificate_type != 0x00 && xex_.certificate.certificate_type != 0x01) {
-        return false;
+        throw CertificateValidationException("certificate_type", "invalid type 0x" + std::to_string(xex_.certificate.certificate_type));
     }
 
     uint8_t title_flags = xex_.certificate.title_flags;
     bool is_system_title = (title_flags & 0x08) != 0;
 
     if (is_system_title && xex_.certificate.executable_type != 0x01) {
-        return false;
+        throw CertificateValidationException("executable_type", "system titles require type 0x01");
     }
 
     uint16_t platform = xex_.certificate.platform;
     if (platform != 0x0001) {
-        return false;
+        throw CertificateValidationException("platform", "invalid platform 0x" + std::to_string(platform));
     }
 
     return true;

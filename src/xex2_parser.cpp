@@ -1,4 +1,5 @@
 #include "xex2.h"
+#include "xex2_exceptions.h"
 #include <fstream>
 #include <cstring>
 #include <algorithm>
@@ -15,7 +16,7 @@ public:
         std::string filepath_str(filepath_);
         std::ifstream file(filepath_str, std::ios::binary);
         if (!file) {
-            throw std::runtime_error("failed to open file: " + filepath_str);
+            throw FileOpenException(filepath_str, "file does not exist or cannot be opened");
         }
 
         file_.swap(file);
@@ -39,11 +40,11 @@ private:
         file_.read(reinterpret_cast<char*>(&xex.header), sizeof(XexHeader));
 
         if (!file_ || file_.gcount() != static_cast<std::streamsize>(sizeof(XexHeader))) {
-            throw std::runtime_error("failed to read header: insufficient data");
+            throw InsufficientDataException("XexHeader", sizeof(XexHeader), file_.gcount());
         }
 
         if (xex.header.magic != XEX_MAGIC) {
-            throw std::runtime_error("invalid xex magic number");
+            throw InvalidMagicException("0x58455832", "0x" + std::to_string(xex.header.magic));
         }
 
         xex.is_encrypted = false;
@@ -63,7 +64,7 @@ private:
             file_.read(reinterpret_cast<char*>(&size), sizeof(uint32_t));
 
             if (!file_ || file_.gcount() != static_cast<std::streamsize>(sizeof(uint32_t) * 2)) {
-                throw std::runtime_error("failed to read optional header id/size");
+                throw InsufficientDataException("XexOptHeader id/size", sizeof(uint32_t) * 2, file_.gcount());
             }
 
             opt_header.id = static_cast<XexOptHeaderId>(id);
@@ -77,7 +78,7 @@ private:
             file_.read(reinterpret_cast<char*>(opt_header.data.data()), size);
 
             if (!file_ || file_.gcount() != static_cast<std::streamsize>(size)) {
-                throw std::runtime_error("failed to read optional header data");
+                throw FileReadException(std::string(filepath_), size, file_.gcount());
             }
 
             xex.opt_headers.push_back(opt_header);
@@ -215,12 +216,12 @@ private:
         uint32_t image_offset = ((xex.header.header_size + 0xFFF) & ~0xFFF);
         file_.seekg(0, std::ios::end);
         if (!file_) {
-            throw std::runtime_error("failed to seek to end of file");
+            throw FileOpenException(std::string(filepath_), "failed to seek to end of file");
         }
 
         uint32_t file_size = file_.tellg();
         if (file_size < image_offset) {
-            throw std::runtime_error("invalid header size: larger than file");
+            throw CorruptHeaderException("XexHeader", "header_size exceeds file size");
         }
 
         uint32_t image_size = file_size - image_offset;
@@ -230,7 +231,7 @@ private:
         file_.read(reinterpret_cast<char*>(xex.image_data.data()), image_size);
 
         if (!file_ || file_.gcount() != static_cast<std::streamsize>(image_size)) {
-            throw std::runtime_error("failed to read image data");
+            throw FileReadException(std::string(filepath_), image_size, file_.gcount());
         }
     }
 };

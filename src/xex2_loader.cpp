@@ -1,4 +1,5 @@
 #include "xex2.h"
+#include "xex2_exceptions.h"
 #include <cstring>
 #include <stdexcept>
 #include <algorithm>
@@ -16,7 +17,7 @@ constexpr uint32_t SECTION_EXECUTABLE = 0x20000000;
 template<typename T>
 T read_struct(const std::vector<uint8_t>& data, size_t offset) {
     if (offset + sizeof(T) > data.size()) {
-        throw std::runtime_error("buffer overflow reading struct");
+        throw InsufficientDataException("struct", sizeof(T), data.size() - offset);
     }
     T result;
     std::memcpy(&result, data.data() + offset, sizeof(T));
@@ -186,39 +187,40 @@ bool Xex2Loader::load() {
 
 bool Xex2Loader::map_segments() {
     if (!is_loaded_) {
-        return false;
+        throw PeCorruptException("image not loaded");
     }
 
     if (decrypted_image_.size() < sizeof(PeHeaderDOS)) {
-        return false;
+        throw InsufficientDataException("PeHeaderDOS", sizeof(PeHeaderDOS), decrypted_image_.size());
     }
 
     const auto dos_header = read_struct<PeHeaderDOS>(decrypted_image_, 0);
 
     if (dos_header.e_magic != DOS_MAGIC) {
-        return false;
+        throw InvalidPeMagicException(dos_header.e_magic);
     }
 
     if (dos_header.e_lfanew >= decrypted_image_.size()) {
-        return false;
+        throw InvalidOffsetException("NT header", dos_header.e_lfanew, decrypted_image_.size());
     }
 
     uint32_t nt_offset = dos_header.e_lfanew;
     if (nt_offset + sizeof(PeHeaderNT) > decrypted_image_.size()) {
-        return false;
+        throw InsufficientDataException("PeHeaderNT", sizeof(PeHeaderNT), decrypted_image_.size() - nt_offset);
     }
 
     const auto nt_header = read_struct<PeHeaderNT>(decrypted_image_, nt_offset);
 
     if (nt_header.magic != PE_MAGIC_32 && nt_header.magic != PE_MAGIC_64) {
-        return false;
+        throw PeCorruptException("invalid PE magic: 0x" + std::to_string(nt_header.magic));
     }
 
     const auto file_header = read_struct<PeFileHeader>(decrypted_image_, nt_offset + 4);
 
     uint32_t section_offset = nt_offset + 4 + sizeof(PeFileHeader);
-    if (section_offset + file_header.number_of_sections * sizeof(PeSectionHeader) > decrypted_image_.size()) {
-        return false;
+    size_t sections_size = file_header.number_of_sections * sizeof(PeSectionHeader);
+    if (section_offset + sections_size > decrypted_image_.size()) {
+        throw SectionMappingException("insufficient data for section headers");
     }
 
     std::vector<PeSectionHeader> sections(file_header.number_of_sections);

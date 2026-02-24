@@ -1,4 +1,5 @@
 #include "xex2.h"
+#include "xex2_exceptions.h"
 #include <fstream>
 #include <cstring>
 #include <iomanip>
@@ -10,7 +11,7 @@ Xex2Modifier::Xex2Modifier(Xex2& xex) : xex_(xex) {}
 bool Xex2Modifier::dump_header(const std::string& output_path) const {
     std::ofstream out(output_path, std::ios::binary);
     if (!out) {
-        return false;
+        throw FileOpenException(output_path, "cannot create file for writing");
     }
 
     out.write(reinterpret_cast<const char*>(&xex_.header), sizeof(XexHeader));
@@ -35,7 +36,7 @@ bool Xex2Modifier::dump_header(const std::string& output_path) const {
 bool Xex2Modifier::dump_certificate(const std::string& output_path) const {
     std::ofstream out(output_path, std::ios::binary);
     if (!out) {
-        return false;
+        throw FileOpenException(output_path, "cannot create file for writing");
     }
 
     out.write(reinterpret_cast<const char*>(&xex_.certificate.size), sizeof(uint32_t));
@@ -113,7 +114,7 @@ bool Xex2Modifier::set_media_id(uint32_t media_id) {
 bool Xex2Modifier::write_xex(const std::string& output_path) const {
     std::ifstream in(xex_.filepath_, std::ios::binary);
     if (!in) {
-        return false;
+        throw FileOpenException(xex_.filepath_, "cannot open file for reading");
     }
 
     std::vector<uint8_t> file_data;
@@ -126,7 +127,7 @@ bool Xex2Modifier::write_xex(const std::string& output_path) const {
 
     std::ofstream out(output_path, std::ios::binary);
     if (!out) {
-        return false;
+        throw FileOpenException(output_path, "cannot create file for writing");
     }
 
     std::memcpy(file_data.data(), &xex_.header, sizeof(XexHeader));
