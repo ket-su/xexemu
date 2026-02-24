@@ -23,6 +23,7 @@ add_executable(xexemu
     src/xex2_parser.cpp
     src/xex2_loader.cpp
     src/xex2_validator.cpp
+    src/xex2_modifier.cpp
 )
 
 target_include_directories(xexemu PRIVATE include ${json_SOURCE_DIR})

@@ -326,6 +326,9 @@ void print_loader_status(const Xex2Loader& loader) {
 int main(int argc, char* argv[]) {
     if (argc < 2) {
         std::cerr << "usage: " << argv[0] << " <xex_file> [--verify] [--load] [--output-format json|xml|text] [--output-file <path>]" << std::endl;
+        std::cerr << "       [--dump-header <path>] [--dump-certificate <path>] [--dump-opt-header <id> <path>]" << std::endl;
+        std::cerr << "       [--set-title-id <value>] [--set-media-id <value>] [--set-min-version <value>]" << std::endl;
+        std::cerr << "       [--set-max-version <value>] [--set-allowed-media <value>] [--write-xex <path>]" << std::endl;
         return 1;
     }
 
@@ -334,6 +337,21 @@ int main(int argc, char* argv[]) {
     bool load = false;
     std::string output_format = "text";
     std::string output_file = "";
+    std::string dump_header = "";
+    std::string dump_certificate = "";
+    std::string dump_opt_header_id = "";
+    std::string dump_opt_header_path = "";
+    uint32_t set_title_id = 0;
+    bool has_set_title_id = false;
+    uint32_t set_media_id = 0;
+    bool has_set_media_id = false;
+    uint32_t set_min_version = 0;
+    bool has_set_min_version = false;
+    uint32_t set_max_version = 0;
+    bool has_set_max_version = false;
+    uint32_t set_allowed_media = 0;
+    bool has_set_allowed_media = false;
+    std::string write_xex = "";
 
     for (int i = 2; i < argc; i++) {
         auto arg = std::string(argv[i]);
@@ -359,11 +377,131 @@ int main(int argc, char* argv[]) {
                 std::cerr << "error: --output-file requires an argument" << std::endl;
                 return 1;
             }
+        } else if (arg == "--dump-header") {
+            if (i + 1 < argc) {
+                dump_header = argv[++i];
+            } else {
+                std::cerr << "error: --dump-header requires an argument" << std::endl;
+                return 1;
+            }
+        } else if (arg == "--dump-certificate") {
+            if (i + 1 < argc) {
+                dump_certificate = argv[++i];
+            } else {
+                std::cerr << "error: --dump-certificate requires an argument" << std::endl;
+                return 1;
+            }
+        } else if (arg == "--dump-opt-header") {
+            if (i + 2 < argc) {
+                dump_opt_header_id = argv[++i];
+                dump_opt_header_path = argv[++i];
+            } else {
+                std::cerr << "error: --dump-opt-header requires two arguments (id and path)" << std::endl;
+                return 1;
+            }
+        } else if (arg == "--set-title-id") {
+            if (i + 1 < argc) {
+                set_title_id = std::stoul(argv[++i], nullptr, 0);
+                has_set_title_id = true;
+            } else {
+                std::cerr << "error: --set-title-id requires an argument" << std::endl;
+                return 1;
+            }
+        } else if (arg == "--set-media-id") {
+            if (i + 1 < argc) {
+                set_media_id = std::stoul(argv[++i], nullptr, 0);
+                has_set_media_id = true;
+            } else {
+                std::cerr << "error: --set-media-id requires an argument" << std::endl;
+                return 1;
+            }
+        } else if (arg == "--set-min-version") {
+            if (i + 1 < argc) {
+                set_min_version = std::stoul(argv[++i], nullptr, 0);
+                has_set_min_version = true;
+            } else {
+                std::cerr << "error: --set-min-version requires an argument" << std::endl;
+                return 1;
+            }
+        } else if (arg == "--set-max-version") {
+            if (i + 1 < argc) {
+                set_max_version = std::stoul(argv[++i], nullptr, 0);
+                has_set_max_version = true;
+            } else {
+                std::cerr << "error: --set-max-version requires an argument" << std::endl;
+                return 1;
+            }
+        } else if (arg == "--set-allowed-media") {
+            if (i + 1 < argc) {
+                set_allowed_media = std::stoul(argv[++i], nullptr, 0);
+                has_set_allowed_media = true;
+            } else {
+                std::cerr << "error: --set-allowed-media requires an argument" << std::endl;
+                return 1;
+            }
+        } else if (arg == "--write-xex") {
+            if (i + 1 < argc) {
+                write_xex = argv[++i];
+            } else {
+                std::cerr << "error: --write-xex requires an argument" << std::endl;
+                return 1;
+            }
         }
     }
 
     try {
         xexemu::Xex2 xex = xexemu::parse_xex2(filepath);
+
+        xexemu::Xex2Modifier modifier(xex);
+
+        if (has_set_title_id) {
+            modifier.set_title_id(set_title_id);
+        }
+        if (has_set_media_id) {
+            modifier.set_media_id(set_media_id);
+        }
+        if (has_set_min_version) {
+            modifier.set_minimum_version(set_min_version);
+        }
+        if (has_set_max_version) {
+            modifier.set_maximum_version(set_max_version);
+        }
+        if (has_set_allowed_media) {
+            modifier.set_allowed_media(set_allowed_media);
+        }
+
+        if (!dump_header.empty()) {
+            if (modifier.dump_header(dump_header)) {
+                std::cout << "dumped header to " << dump_header << std::endl;
+            } else {
+                std::cerr << "error: failed to dump header" << std::endl;
+            }
+        }
+
+        if (!dump_certificate.empty()) {
+            if (modifier.dump_certificate(dump_certificate)) {
+                std::cout << "dumped certificate to " << dump_certificate << std::endl;
+            } else {
+                std::cerr << "error: failed to dump certificate" << std::endl;
+            }
+        }
+
+        if (!dump_opt_header_path.empty()) {
+            uint32_t opt_header_id = std::stoul(dump_opt_header_id, nullptr, 0);
+            if (modifier.dump_opt_header(static_cast<xexemu::XexOptHeaderId>(opt_header_id), dump_opt_header_path)) {
+                std::cout << "dumped optional header 0x" << std::hex << opt_header_id << std::dec << " to " << dump_opt_header_path << std::endl;
+            } else {
+                std::cerr << "error: failed to dump optional header" << std::endl;
+            }
+        }
+
+        if (!write_xex.empty()) {
+            if (modifier.write_xex(write_xex)) {
+                std::cout << "wrote modified xex to " << write_xex << std::endl;
+            } else {
+                std::cerr << "error: failed to write xex" << std::endl;
+            }
+        }
 
         xexemu::Xex2Validator::VerificationResult* verification_result = nullptr;
         xexemu::Xex2Validator::VerificationResult result_value;

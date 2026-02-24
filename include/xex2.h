@@ -179,4 +179,24 @@ private:
 
 Xex2 parse_xex2(std::string_view filepath);
 
+class Xex2Modifier {
+public:
+    explicit Xex2Modifier(Xex2& xex);
+
+    bool dump_header(const std::string& output_path) const;
+    bool dump_certificate(const std::string& output_path) const;
+    bool dump_opt_header(XexOptHeaderId id, const std::string& output_path) const;
+
+    bool set_title_id(uint32_t title_id);
+    bool set_allowed_media(uint32_t allowed_media);
+    bool set_minimum_version(uint32_t version);
+    bool set_maximum_version(uint32_t version);
+    bool set_media_id(uint32_t media_id);
+
+    bool write_xex(const std::string& output_path) const;
+
+private:
+    Xex2& xex_;
+};
+
 }
