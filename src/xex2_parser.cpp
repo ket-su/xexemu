@@ -23,6 +23,7 @@ public:
 
         Xex2 xex;
         xex.filepath_ = filepath_str;
+        xex.allowed_media_types_opt_header = 0;
         parse_header(xex);
         parse_optional_headers(xex);
         parse_security_info(xex);
@@ -101,6 +102,9 @@ private:
                 case XexOptHeaderId::ResourceInfo:
                     parse_resource_info(opt_header, xex);
                     break;
+                case XexOptHeaderId::AllowedMediaTypes:
+                    parse_allowed_media_types(opt_header, xex);
+                    break;
                 default:
                     break;
             }
@@ -126,6 +130,12 @@ private:
             XexResourceInfo info;
             std::memcpy(&info, opt_header.data.data() + i * sizeof(XexResourceInfo), sizeof(XexResourceInfo));
             xex.resource_infos.push_back(info);
+        }
+    }
+
+    void parse_allowed_media_types(const XexOptHeader& opt_header, Xex2& xex) {
+        if (opt_header.data.size() >= sizeof(uint32_t)) {
+            std::memcpy(&xex.allowed_media_types_opt_header, opt_header.data.data(), sizeof(uint32_t));
         }
     }
 

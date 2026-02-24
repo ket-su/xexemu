@@ -137,6 +137,7 @@ struct Xex2 {
     std::vector<uint8_t> image_data;
     bool is_encrypted;
     bool is_compressed;
+    uint32_t allowed_media_types_opt_header;
     std::string filepath_;
 };
 

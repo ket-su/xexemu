@@ -247,6 +247,42 @@ void print_certificate(const XexCertificate& cert) {
     print_hex(std::vector<uint8_t>(cert.lan_key.begin(), cert.lan_key.end()));
 }
 
+std::string get_media_type_name(uint32_t media_type) {
+    switch (media_type) {
+        case 0x01: return "hard drive";
+        case 0x02: return "dvd x2";
+        case 0x04: return "cd";
+        case 0x08: return "dvd x9";
+        case 0x10: return "xbox 360 hard disk";
+        case 0x20: return "nand";
+        case 0x40: return "flash";
+        case 0x80: return "usb";
+        default: return "unknown";
+    }
+}
+
+void print_allowed_media_types(uint32_t allowed_media) {
+    std::cout << "allowed media types:" << std::endl;
+    std::cout << "  raw value: 0x" << std::hex << allowed_media << std::dec << std::endl;
+    std::cout << "  media types:" << std::endl;
+
+    bool any_found = false;
+    for (uint32_t bit = 0; bit < 32; bit++) {
+        if (allowed_media & (1 << bit)) {
+            std::string media_name = get_media_type_name(1 << bit);
+            if (media_name != "unknown") {
+                std::cout << "    - " << media_name << " (0x" << std::hex << (1 << bit) << std::dec << ")" << std::endl;
+                any_found = true;
+            }
+        }
+    }
+
+    if (!any_found) {
+        std::cout << "    none specified" << std::endl;
+    }
+    std::cout << std::endl;
+}
+
 void print_analysis(const Xex2& xex) {
     std::cout << "xex2 analysis" << std::endl;
     std::cout << std::endl;
@@ -283,6 +319,10 @@ void print_analysis(const Xex2& xex) {
 
     print_certificate(xex.certificate);
     std::cout << std::endl;
+
+    if (xex.allowed_media_types_opt_header != 0) {
+        print_allowed_media_types(xex.allowed_media_types_opt_header);
+    }
 
     std::cout << "security headers: " << xex.security_headers.size() << std::endl;
     for (const auto& sec_header : xex.security_headers) {
