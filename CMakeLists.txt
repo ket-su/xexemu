@@ -9,6 +9,8 @@ set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 -DNDEBUG")
 
 include_directories(include)
 
+find_package(OpenSSL REQUIRED)
+
 add_executable(xexemu
     src/main.cpp
     src/xex2_parser.cpp
@@ -17,3 +19,4 @@ add_executable(xexemu
 )
 
 target_include_directories(xexemu PRIVATE include)
+target_link_libraries(xexemu OpenSSL::Crypto)
