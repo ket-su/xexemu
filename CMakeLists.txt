@@ -11,6 +11,13 @@ include_directories(include)
 
 find_package(OpenSSL REQUIRED)
 
+include(FetchContent)
+FetchContent_Declare(json
+    URL https://github.com/nlohmann/json/releases/download/v3.10.5/json.hpp
+    DOWNLOAD_NO_EXTRACT true
+)
+FetchContent_MakeAvailable(json)
+
 add_executable(xexemu
     src/main.cpp
     src/xex2_parser.cpp
@@ -18,5 +25,5 @@ add_executable(xexemu
     src/xex2_validator.cpp
 )
 
-target_include_directories(xexemu PRIVATE include)
+target_include_directories(xexemu PRIVATE include ${json_SOURCE_DIR})
 target_link_libraries(xexemu OpenSSL::Crypto)

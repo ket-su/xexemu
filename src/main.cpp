@@ -2,8 +2,199 @@
 #include <iostream>
 #include <iomanip>
 #include <fstream>
+#include <sstream>
+#include <memory>
+#include <json.hpp>
 
 namespace xexemu {
+
+using nlohmann::json;
+
+json output_json(const Xex2& xex, const Xex2Validator::VerificationResult* verification_result = nullptr) {
+    json j;
+
+    j["header"]["magic"] = "0x" + (std::stringstream() << std::hex << xex.header.magic).str();
+    j["header"]["header_size"] = xex.header.header_size;
+    j["header"]["security_offset"] = "0x" + (std::stringstream() << std::hex << xex.header.security_offset).str();
+    j["header"]["header_count"] = xex.header.header_count;
+
+    j["image"]["encrypted"] = xex.is_encrypted;
+    j["image"]["compressed"] = xex.is_compressed;
+    j["image"]["size"] = xex.image_data.size();
+
+    j["opt_headers"] = json::array();
+    for (const auto& opt_header : xex.opt_headers) {
+        json h;
+        h["id"] = "0x" + (std::stringstream() << std::hex << std::setw(8) << std::setfill('0') << (uint32_t)opt_header.id).str();
+        h["size"] = opt_header.size;
+        j["opt_headers"].push_back(h);
+    }
+
+    if (xex.execution_info.title_id != 0) {
+        j["execution_info"]["media_id"] = "0x" + (std::stringstream() << std::hex << xex.execution_info.media_id).str();
+        j["execution_info"]["version"] = xex.execution_info.version;
+        j["execution_info"]["base_version"] = xex.execution_info.base_version;
+        j["execution_info"]["title_id"] = "0x" + (std::stringstream() << std::hex << xex.execution_info.title_id).str();
+        j["execution_info"]["platform"] = (int)xex.execution_info.platform;
+        j["execution_info"]["executable_type"] = (int)xex.execution_info.executable_type;
+        j["execution_info"]["disc_number"] = (int)xex.execution_info.disc_number;
+        j["execution_info"]["disc_count"] = (int)xex.execution_info.disc_count;
+        j["execution_info"]["save_game_id"] = "0x" + (std::stringstream() << std::hex << xex.execution_info.save_game_id).str();
+    }
+
+    if (xex.file_format_info.image_size != 0) {
+        j["file_format_info"]["encryption_type"] = "0x" + (std::stringstream() << std::hex << xex.file_format_info.encryption_type).str();
+        j["file_format_info"]["compression_type"] = "0x" + (std::stringstream() << std::hex << xex.file_format_info.compression_type).str();
+        j["file_format_info"]["encryption_flags"] = "0x" + (std::stringstream() << std::hex << xex.file_format_info.encryption_flags).str();
+        j["file_format_info"]["block_count"] = xex.file_format_info.block_count;
+        j["file_format_info"]["image_size"] = "0x" + (std::stringstream() << std::hex << xex.file_format_info.image_size).str();
+        j["file_format_info"]["image_base"] = "0x" + (std::stringstream() << std::hex << xex.file_format_info.image_base).str();
+    }
+
+    j["certificate"]["title_id"] = "0x" + (std::stringstream() << std::hex << xex.certificate.title_id).str();
+    j["certificate"]["platform"] = "0x" + (std::stringstream() << std::hex << xex.certificate.platform).str();
+    j["certificate"]["executable_type"] = (int)xex.certificate.executable_type;
+    j["certificate"]["page_size"] = (int)xex.certificate.page_size;
+    j["certificate"]["minimum_version"] = xex.certificate.minimum_version;
+    j["certificate"]["maximum_version"] = xex.certificate.maximum_version;
+    j["certificate"]["allowed_media"] = "0x" + (std::stringstream() << std::hex << xex.certificate.allowed_media).str();
+    j["certificate"]["certificate_type"] = (int)xex.certificate.certificate_type;
+    j["certificate"]["title_flags"] = "0x" + (std::stringstream() << std::hex << (int)xex.certificate.title_flags).str();
+
+    std::stringstream lan_key_ss;
+    lan_key_ss << std::hex << std::setfill('0');
+    for (size_t i = 0; i < xex.certificate.lan_key.size(); i++) {
+        lan_key_ss << std::setw(2) << (int)xex.certificate.lan_key[i];
+    }
+    j["certificate"]["lan_key"] = lan_key_ss.str();
+
+    j["security_headers"] = json::array();
+    for (const auto& sec_header : xex.security_headers) {
+        json h;
+        h["id"] = "0x" + (std::stringstream() << std::hex << std::setw(8) << std::setfill('0') << sec_header.id).str();
+        h["size"] = sec_header.size;
+        j["security_headers"].push_back(h);
+    }
+
+    j["resources"] = json::array();
+    for (const auto& resource : xex.resource_infos) {
+        json r;
+        r["offset"] = "0x" + (std::stringstream() << std::hex << resource.offset).str();
+        r["size"] = resource.size;
+        r["flags"] = "0x" + (std::stringstream() << std::hex << resource.flags).str();
+        r["title_id"] = "0x" + (std::stringstream() << std::hex << resource.title_id).str();
+        j["resources"].push_back(r);
+    }
+
+    if (verification_result) {
+        j["verification"]["hypervisor_signature"] = verification_result->hypervisor_valid ? "valid" : "invalid";
+        j["verification"]["kernel_load_checks"] = verification_result->kernel_valid ? "pass" : "fail";
+        j["verification"]["certificate_chain"] = verification_result->certificate_valid ? "valid" : "invalid";
+        j["verification"]["media_restrictions"] = verification_result->media_valid ? "pass" : "fail";
+        if (!verification_result->error_message.empty()) {
+            j["verification"]["error"] = verification_result->error_message;
+        }
+    }
+
+    return j;
+}
+
+std::string output_xml(const Xex2& xex, const Xex2Validator::VerificationResult* verification_result = nullptr) {
+    std::stringstream ss;
+    ss << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
+    ss << "<xex>\n";
+
+    ss << "  <header>\n";
+    ss << "    <magic>0x" << std::hex << xex.header.magic << "</magic>\n";
+    ss << "    <header_size>" << std::dec << xex.header.header_size << "</header_size>\n";
+    ss << "    <security_offset>0x" << std::hex << xex.header.security_offset << "</security_offset>\n";
+    ss << "    <header_count>" << std::dec << xex.header.header_count << "</header_count>\n";
+    ss << "  </header>\n";
+
+    ss << "  <image>\n";
+    ss << "    <encrypted>" << (xex.is_encrypted ? "true" : "false") << "</encrypted>\n";
+    ss << "    <compressed>" << (xex.is_compressed ? "true" : "false") << "</compressed>\n";
+    ss << "    <size>" << std::dec << xex.image_data.size() << "</size>\n";
+    ss << "  </image>\n";
+
+    ss << "  <opt_headers>\n";
+    for (const auto& opt_header : xex.opt_headers) {
+        ss << "    <header>\n";
+        ss << "      <id>0x" << std::hex << std::setw(8) << std::setfill('0') << (uint32_t)opt_header.id << "</id>\n";
+        ss << "      <size>" << std::dec << opt_header.size << "</size>\n";
+        ss << "    </header>\n";
+    }
+    ss << "  </opt_headers>\n";
+
+    if (xex.execution_info.title_id != 0) {
+        ss << "  <execution_info>\n";
+        ss << "    <media_id>0x" << std::hex << xex.execution_info.media_id << "</media_id>\n";
+        ss << "    <version>" << std::dec << xex.execution_info.version << "</version>\n";
+        ss << "    <base_version>" << xex.execution_info.base_version << "</base_version>\n";
+        ss << "    <title_id>0x" << std::hex << xex.execution_info.title_id << "</title_id>\n";
+        ss << "    <platform>" << (int)xex.execution_info.platform << "</platform>\n";
+        ss << "    <executable_type>" << (int)xex.execution_info.executable_type << "</executable_type>\n";
+        ss << "    <disc_number>" << (int)xex.execution_info.disc_number << "</disc_number>\n";
+        ss << "    <disc_count>" << (int)xex.execution_info.disc_count << "</disc_count>\n";
+        ss << "    <save_game_id>0x" << std::hex << xex.execution_info.save_game_id << "</save_game_id>\n";
+        ss << "  </execution_info>\n";
+    }
+
+    ss << "  <certificate>\n";
+    ss << "    <title_id>0x" << std::hex << xex.certificate.title_id << "</title_id>\n";
+    ss << "    <platform>0x" << std::hex << xex.certificate.platform << "</platform>\n";
+    ss << "    <executable_type>" << (int)xex.certificate.executable_type << "</executable_type>\n";
+    ss << "    <page_size>" << (int)xex.certificate.page_size << "</page_size>\n";
+    ss << "    <minimum_version>" << std::dec << xex.certificate.minimum_version << "</minimum_version>\n";
+    ss << "    <maximum_version>" << xex.certificate.maximum_version << "</maximum_version>\n";
+    ss << "    <allowed_media>0x" << std::hex << xex.certificate.allowed_media << "</allowed_media>\n";
+    ss << "    <certificate_type>" << (int)xex.certificate.certificate_type << "</certificate_type>\n";
+    ss << "    <title_flags>0x" << std::hex << (int)xex.certificate.title_flags << "</title_flags>\n";
+
+    ss << "    <lan_key>";
+    ss << std::hex << std::setfill('0');
+    for (size_t i = 0; i < xex.certificate.lan_key.size(); i++) {
+        ss << std::setw(2) << (int)xex.certificate.lan_key[i];
+    }
+    ss << "</lan_key>\n";
+    ss << "  </certificate>\n";
+
+    ss << "  <security_headers>\n";
+    for (const auto& sec_header : xex.security_headers) {
+        ss << "    <header>\n";
+        ss << "      <id>0x" << std::hex << std::setw(8) << std::setfill('0') << sec_header.id << "</id>\n";
+        ss << "      <size>" << std::dec << sec_header.size << "</size>\n";
+        ss << "    </header>\n";
+    }
+    ss << "  </security_headers>\n";
+
+    ss << "  <resources>\n";
+    for (const auto& resource : xex.resource_infos) {
+        ss << "    <resource>\n";
+        ss << "      <offset>0x" << std::hex << resource.offset << "</offset>\n";
+        ss << "      <size>" << std::dec << resource.size << "</size>\n";
+        ss << "      <flags>0x" << std::hex << resource.flags << "</flags>\n";
+        ss << "      <title_id>0x" << std::hex << resource.title_id << "</title_id>\n";
+        ss << "    </resource>\n";
+    }
+    ss << "  </resources>\n";
+
+    if (verification_result) {
+        ss << "  <verification>\n";
+        ss << "    <hypervisor_signature>" << (verification_result->hypervisor_valid ? "valid" : "invalid") << "</hypervisor_signature>\n";
+        ss << "    <kernel_load_checks>" << (verification_result->kernel_valid ? "pass" : "fail") << "</kernel_load_checks>\n";
+        ss << "    <certificate_chain>" << (verification_result->certificate_valid ? "valid" : "invalid") << "</certificate_chain>\n";
+        ss << "    <media_restrictions>" << (verification_result->media_valid ? "pass" : "fail") << "</media_restrictions>\n";
+        if (!verification_result->error_message.empty()) {
+            ss << "    <error>" << verification_result->error_message << "</error>\n";
+        }
+        ss << "  </verification>\n";
+    }
+
+    ss << "</xex>\n";
+
+    return ss.str();
+}
 
 void print_hex(const std::vector<uint8_t>& data, size_t max_bytes = 32) {
     auto count = std::min(data.size(), max_bytes);
@@ -134,13 +325,15 @@ void print_loader_status(const Xex2Loader& loader) {
 
 int main(int argc, char* argv[]) {
     if (argc < 2) {
-        std::cerr << "usage: " << argv[0] << " <xex_file> [--verify] [--load]" << std::endl;
+        std::cerr << "usage: " << argv[0] << " <xex_file> [--verify] [--load] [--output-format json|xml|text] [--output-file <path>]" << std::endl;
         return 1;
     }
 
     std::string filepath = argv[1];
     bool verify = false;
     bool load = false;
+    std::string output_format = "text";
+    std::string output_file = "";
 
     for (int i = 2; i < argc; i++) {
         auto arg = std::string(argv[i]);
@@ -148,45 +341,94 @@ int main(int argc, char* argv[]) {
             verify = true;
         } else if (arg == "--load") {
             load = true;
+        } else if (arg == "--output-format") {
+            if (i + 1 < argc) {
+                output_format = argv[++i];
+                if (output_format != "json" && output_format != "xml" && output_format != "text") {
+                    std::cerr << "error: invalid output format, must be json, xml, or text" << std::endl;
+                    return 1;
+                }
+            } else {
+                std::cerr << "error: --output-format requires an argument" << std::endl;
+                return 1;
+            }
+        } else if (arg == "--output-file") {
+            if (i + 1 < argc) {
+                output_file = argv[++i];
+            } else {
+                std::cerr << "error: --output-file requires an argument" << std::endl;
+                return 1;
+            }
         }
     }
 
     try {
         xexemu::Xex2 xex = xexemu::parse_xex2(filepath);
-        xexemu::print_analysis(xex);
+
+        xexemu::Xex2Validator::VerificationResult* verification_result = nullptr;
+        xexemu::Xex2Validator::VerificationResult result_value;
 
         if (verify) {
             xexemu::Xex2Validator validator(xex);
-            auto result = validator.full_verification();
-            xexemu::print_verification_result(result);
+            result_value = validator.full_verification();
+            verification_result = &result_value;
         }
 
-        if (load) {
-            xexemu::Xex2Loader loader(xex);
-            if (loader.load()) {
-                xexemu::print_loader_status(loader);
+        if (output_format == "json") {
+            nlohmann::json j = output_json(xex, verification_result);
+            std::string output = j.dump(2);
 
-                if (loader.map_segments()) {
-                    std::cout << "segment mapping: ok" << std::endl;
-                } else {
-                    std::cout << "segment mapping: fail" << std::endl;
-                }
-
-                if (loader.resolve_imports()) {
-                    std::cout << "import resolution: ok" << std::endl;
-                } else {
-                    std::cout << "import resolution: fail" << std::endl;
-                }
-
-                if (loader.initialise_tls()) {
-                    std::cout << "tls initialisation: ok" << std::endl;
-                } else {
-                    std::cout << "tls initialisation: fail" << std::endl;
-                }
+            if (!output_file.empty()) {
+                std::ofstream out(output_file);
+                out << output;
+                out.close();
             } else {
-                std::cout << "image loading: fail" << std::endl;
+                std::cout << output << std::endl;
             }
-            std::cout << std::endl;
+        } else if (output_format == "xml") {
+            std::string output = output_xml(xex, verification_result);
+
+            if (!output_file.empty()) {
+                std::ofstream out(output_file);
+                out << output;
+                out.close();
+            } else {
+                std::cout << output << std::endl;
+            }
+        } else {
+            xexemu::print_analysis(xex);
+
+            if (verification_result) {
+                xexemu::print_verification_result(*verification_result);
+            }
+
+            if (load) {
+                xexemu::Xex2Loader loader(xex);
+                if (loader.load()) {
+                    xexemu::print_loader_status(loader);
+
+                    if (loader.map_segments()) {
+                        std::cout << "segment mapping: ok" << std::endl;
+                    } else {
+                        std::cout << "segment mapping: fail" << std::endl;
+                    }
+
+                    if (loader.resolve_imports()) {
+                        std::cout << "import resolution: ok" << std::endl;
+                    } else {
+                        std::cout << "import resolution: fail" << std::endl;
+                    }
+
+                    if (loader.initialise_tls()) {
+                        std::cout << "tls initialisation: ok" << std::endl;
+                    } else {
+                        std::cout << "tls initialisation: fail" << std::endl;
+                    }
+                } else {
+                    std::cout << "image loading: fail" << std::endl;
+                }
+                std::cout << std::endl;
+            }
         }
 
     } catch (const std::exception& e) {
