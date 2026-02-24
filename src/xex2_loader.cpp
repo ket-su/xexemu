@@ -110,7 +110,73 @@ struct ImageTlsDirectory {
     uint32_t characteristics;
 };
 
+struct RuntimeFunction {
+    uint32_t begin_address;
+    uint32_t end_address;
+    uint32_t unwind_info_address;
+};
+
+struct UnwindInfoHeader {
+    uint8_t version_flags;
+    uint8_t size_of_prolog;
+    uint8_t count_of_codes;
+    uint8_t frame_register_offset;
+};
+
 Xex2Loader::Xex2Loader(const Xex2& xex) : xex_(xex), is_loaded_(false) {}
+
+bool Xex2Loader::parse_exception_directory() {
+    if (!is_loaded_) {
+        return false;
+    }
+
+    const auto dos_header = read_struct<PeHeaderDOS>(decrypted_image_, 0);
+    uint32_t nt_offset = dos_header.e_lfanew;
+    const auto nt_header = read_struct<PeHeaderNT>(decrypted_image_, nt_offset);
+
+    uint32_t exception_dir_rva = static_cast<uint32_t>(nt_header.data_directory[3] & 0xFFFFFFFF);
+    uint32_t exception_dir_size = static_cast<uint32_t>((nt_header.data_directory[3] >> 32) & 0xFFFFFFFF);
+
+    if (exception_dir_rva == 0 || exception_dir_size == 0) {
+        return true;
+    }
+
+    if (exception_dir_rva + exception_dir_size > decrypted_image_.size()) {
+        return false;
+    }
+
+    size_t function_count = exception_dir_size / sizeof(RuntimeFunction);
+    for (size_t i = 0; i < function_count; i++) {
+        RuntimeFunction func;
+        size_t offset = exception_dir_rva + i * sizeof(RuntimeFunction);
+        
+        if (offset + sizeof(RuntimeFunction) > decrypted_image_.size()) {
+            break;
+        }
+
+        std::memcpy(&func, decrypted_image_.data() + offset, sizeof(RuntimeFunction));
+
+        if (func.begin_address == 0 && func.end_address == 0) {
+            continue;
+        }
+
+        if (func.unwind_info_address < decrypted_image_.size()) {
+            UnwindInfoHeader unwind_header;
+            if (func.unwind_info_address + sizeof(UnwindInfoHeader) <= decrypted_image_.size()) {
+                std::memcpy(&unwind_header, decrypted_image_.data() + func.unwind_info_address, sizeof(UnwindInfoHeader));
+                
+                uint8_t version = unwind_header.version_flags & 0x07;
+                uint8_t flags = (unwind_header.version_flags >> 3) & 0x1F;
+                bool has_exception_handler = (flags & 0x01) != 0;
+                
+                uint8_t frame_register = (unwind_header.frame_register_offset >> 4) & 0x0F;
+                uint8_t frame_offset = unwind_header.frame_register_offset & 0x0F;
+            }
+        }
+    }
+
+    return true;
+}
 
 bool Xex2Loader::load() {
     decrypted_image_ = xex_.image_data;

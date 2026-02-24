@@ -321,6 +321,14 @@ void print_loader_status(const Xex2Loader& loader) {
     std::cout << std::endl;
 }
 
+void print_exception_directory_status() {
+    std::cout << "exception directory analysis" << std::endl;
+    std::cout << "  parsed PE exception directory for unwind info extraction" << std::endl;
+    std::cout << "  runtime function entries enumerated" << std::endl;
+    std::cout << "  unwind info headers decoded" << std::endl;
+    std::cout << std::endl;
+}
+
 }
 
 int main(int argc, char* argv[]) {
@@ -561,6 +569,12 @@ int main(int argc, char* argv[]) {
                         std::cout << "tls initialisation: ok" << std::endl;
                     } else {
                         std::cout << "tls initialisation: fail" << std::endl;
+                    }
+
+                    if (loader.parse_exception_directory()) {
+                        xexemu::print_exception_directory_status();
+                    } else {
+                        std::cout << "exception directory parsing: fail" << std::endl;
                     }
                 } else {
                     std::cout << "image loading: fail" << std::endl;
