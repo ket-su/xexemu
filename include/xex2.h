@@ -140,6 +140,21 @@ struct XexFileFormatInfo {
     uint32_t image_base_high;
 };
 
+struct XexStackInfo {
+    uint32_t stack_commit;
+    uint32_t stack_reserve;
+};
+
+struct XexAlternateTitleIds {
+    uint16_t title_count;
+    std::vector<uint32_t> title_ids;
+};
+
+struct XexServiceIdList {
+    uint16_t service_count;
+    std::vector<uint32_t> service_ids;
+};
+
 struct XexSecurityHeader {
     uint32_t id;
     uint32_t size;
@@ -159,6 +174,24 @@ struct Xex2 {
     bool is_compressed;
     uint32_t allowed_media_types_opt_header;
     std::string filepath_;
+
+    uint32_t entry_point;
+    uint64_t image_base_address;
+    uint32_t default_stack_size;
+    std::array<uint8_t, 20> pe_image_digest;
+    uint32_t session_id;
+    std::array<uint8_t, 16> encryption_key;
+    XexAlternateTitleIds alternate_title_ids;
+    std::array<uint8_t, 16> lan_key;
+    std::vector<uint8_t> xbox360_logo;
+    std::vector<uint8_t> xbox1_logo;
+    XexServiceIdList service_id_list;
+    std::array<uint8_t, 16> device_id_key;
+    XexStackInfo stack_info;
+    std::string original_pe_name;
+    std::string original_file_name;
+    uint32_t original_file_sn;
+    std::array<uint8_t, 20> original_unencrypted_hash;
 };
 
 class Xex2Loader {
@@ -175,6 +208,9 @@ private:
     const Xex2& xex_;
     std::vector<uint8_t> decrypted_image_;
     bool is_loaded_;
+
+    bool decrypt_image();
+    bool decompress_image();
 };
 
 class Xex2Validator {

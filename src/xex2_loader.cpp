@@ -3,6 +3,8 @@
 #include <cstring>
 #include <stdexcept>
 #include <algorithm>
+#include <openssl/aes.h>
+#include <openssl/evp.h>
 
 namespace xexemu {
 
@@ -293,8 +295,131 @@ bool Xex2Loader::parse_export_directory() {
 }
 
 bool Xex2Loader::load() {
-    decrypted_image_ = xex_.image_data;
+    if (xex_.is_encrypted) {
+        if (!decrypt_image()) {
+            return false;
+        }
+    } else {
+        decrypted_image_ = xex_.image_data;
+    }
+
+    if (xex_.is_compressed) {
+        if (!decompress_image()) {
+            return false;
+        }
+    }
+
     is_loaded_ = true;
+    return true;
+}
+
+bool Xex2Loader::decrypt_image() {
+    if (xex_.file_format_info.encryption_type != 1) {
+        return false;
+    }
+
+    const auto& key = xex_.encryption_key;
+
+    std::vector<uint8_t> iv(16, 0);
+
+    int len, ciphertext_len = xex_.image_data.size();
+    std::vector<uint8_t> plaintext(ciphertext_len + AES_BLOCK_SIZE);
+
+    EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
+    if (!ctx) {
+        return false;
+    }
+
+    if (EVP_DecryptInit_ex(ctx, EVP_aes_128_cbc(), nullptr, key.data(), iv.data()) != 1) {
+        EVP_CIPHER_CTX_free(ctx);
+        return false;
+    }
+
+    if (EVP_DecryptUpdate(ctx, plaintext.data(), &len, xex_.image_data.data(), ciphertext_len) != 1) {
+        EVP_CIPHER_CTX_free(ctx);
+        return false;
+    }
+
+    int plaintext_len = len;
+
+    if (EVP_DecryptFinal_ex(ctx, plaintext.data() + len, &len) != 1) {
+        EVP_CIPHER_CTX_free(ctx);
+        return false;
+    }
+
+    plaintext_len += len;
+    EVP_CIPHER_CTX_free(ctx);
+
+    decrypted_image_ = plaintext;
+    decrypted_image_.resize(plaintext_len);
+
+    return true;
+}
+
+bool Xex2Loader::decompress_image() {
+    if (xex_.file_format_info.compression_type != 1) {
+        return false;
+    }
+
+    std::vector<uint8_t> decompressed;
+    size_t input_pos = 0;
+    size_t output_pos = 0;
+
+    constexpr size_t window_size = 32768;
+
+    while (input_pos < xex_.image_data.size()) {
+        uint8_t header = xex_.image_data[input_pos++];
+        uint8_t token = (header >> 4) & 0x0F;
+        uint8_t count = header & 0x0F;
+
+        if (token == 0) {
+            if (input_pos >= xex_.image_data.size()) break;
+
+            uint8_t value = xex_.image_data[input_pos++];
+            token = value & 0x0F;
+            count = (value >> 4) & 0x0F;
+
+            if (token == 0) {
+                if (input_pos >= xex_.image_data.size()) break;
+                uint8_t high = xex_.image_data[input_pos++];
+                if (input_pos >= xex_.image_data.size()) break;
+                uint8_t low = xex_.image_data[input_pos++];
+                count = (static_cast<uint32_t>(high) << 8) | low;
+                count += 16;
+
+                if (input_pos >= xex_.image_data.size()) break;
+                uint8_t token_high = xex_.image_data[input_pos++];
+                if (input_pos >= xex_.image_data.size()) break;
+                uint8_t token_low = xex_.image_data[input_pos++];
+                token = (static_cast<uint32_t>(token_high) << 8) | token_low;
+            } else {
+                token += 16;
+                count += 3;
+            }
+        } else {
+            count += 3;
+        }
+
+        if (input_pos + token > xex_.image_data.size()) {
+            break;
+        }
+
+        size_t copy_src = output_pos - token - 1;
+        for (uint8_t i = 0; i < count; i++) {
+            uint8_t value;
+            if (copy_src < output_pos && copy_src < decompressed.size()) {
+                value = decompressed[copy_src];
+                copy_src++;
+            } else {
+                if (input_pos >= xex_.image_data.size()) break;
+                value = xex_.image_data[input_pos++];
+            }
+            decompressed.push_back(value);
+            output_pos++;
+        }
+    }
+
+    decrypted_image_ = decompressed;
     return true;
 }
 

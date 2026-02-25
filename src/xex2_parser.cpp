@@ -24,6 +24,17 @@ public:
         Xex2 xex;
         xex.filepath_ = filepath_str;
         xex.allowed_media_types_opt_header = 0;
+        xex.entry_point = 0;
+        xex.image_base_address = 0;
+        xex.default_stack_size = 0;
+        xex.pe_image_digest = {};
+        xex.session_id = 0;
+        xex.encryption_key = {};
+        xex.lan_key = {};
+        xex.device_id_key = {};
+        xex.stack_info = {};
+        xex.original_file_sn = 0;
+        xex.original_unencrypted_hash = {};
         parse_header(xex);
         parse_optional_headers(xex);
         parse_security_info(xex);
@@ -105,6 +116,57 @@ private:
                 case XexOptHeaderId::AllowedMediaTypes:
                     parse_allowed_media_types(opt_header, xex);
                     break;
+                case XexOptHeaderId::EntryPoint:
+                    parse_entry_point(opt_header, xex);
+                    break;
+                case XexOptHeaderId::ImageBaseAddress:
+                    parse_image_base_address(opt_header, xex);
+                    break;
+                case XexOptHeaderId::DefaultStackSize:
+                    parse_default_stack_size(opt_header, xex);
+                    break;
+                case XexOptHeaderId::PEImageDigest:
+                    parse_pe_image_digest(opt_header, xex);
+                    break;
+                case XexOptHeaderId::SessionID:
+                    parse_session_id(opt_header, xex);
+                    break;
+                case XexOptHeaderId::EncryptionKey:
+                    parse_encryption_key(opt_header, xex);
+                    break;
+                case XexOptHeaderId::AlternateTitleIds:
+                    parse_alternate_title_ids(opt_header, xex);
+                    break;
+                case XexOptHeaderId::LanKey:
+                    parse_lan_key(opt_header, xex);
+                    break;
+                case XexOptHeaderId::Xbox360Logo:
+                    parse_xbox360_logo(opt_header, xex);
+                    break;
+                case XexOptHeaderId::Xbox1Logo:
+                    parse_xbox1_logo(opt_header, xex);
+                    break;
+                case XexOptHeaderId::OnlineServiceIds:
+                    parse_online_service_ids(opt_header, xex);
+                    break;
+                case XexOptHeaderId::DeviceIdKey:
+                    parse_device_id_key(opt_header, xex);
+                    break;
+                case XexOptHeaderId::StackInfo:
+                    parse_stack_info(opt_header, xex);
+                    break;
+                case XexOptHeaderId::OriginalPEName:
+                    parse_original_pe_name(opt_header, xex);
+                    break;
+                case XexOptHeaderId::OriginalFileName:
+                    parse_original_file_name(opt_header, xex);
+                    break;
+                case XexOptHeaderId::OriginalFileSn:
+                    parse_original_file_sn(opt_header, xex);
+                    break;
+                case XexOptHeaderId::OriginalUnencryptedHash:
+                    parse_original_unencrypted_hash(opt_header, xex);
+                    break;
                 default:
                     break;
             }
@@ -136,6 +198,120 @@ private:
     void parse_allowed_media_types(const XexOptHeader& opt_header, Xex2& xex) {
         if (opt_header.data.size() >= sizeof(uint32_t)) {
             std::memcpy(&xex.allowed_media_types_opt_header, opt_header.data.data(), sizeof(uint32_t));
+        }
+    }
+
+    void parse_entry_point(const XexOptHeader& opt_header, Xex2& xex) {
+        if (opt_header.data.size() >= sizeof(uint32_t)) {
+            std::memcpy(&xex.entry_point, opt_header.data.data(), sizeof(uint32_t));
+        }
+    }
+
+    void parse_image_base_address(const XexOptHeader& opt_header, Xex2& xex) {
+        if (opt_header.data.size() >= sizeof(uint64_t)) {
+            std::memcpy(&xex.image_base_address, opt_header.data.data(), sizeof(uint64_t));
+        }
+    }
+
+    void parse_default_stack_size(const XexOptHeader& opt_header, Xex2& xex) {
+        if (opt_header.data.size() >= sizeof(uint32_t)) {
+            std::memcpy(&xex.default_stack_size, opt_header.data.data(), sizeof(uint32_t));
+        }
+    }
+
+    void parse_pe_image_digest(const XexOptHeader& opt_header, Xex2& xex) {
+        if (opt_header.data.size() >= sizeof(xex.pe_image_digest)) {
+            std::memcpy(xex.pe_image_digest.data(), opt_header.data.data(), sizeof(xex.pe_image_digest));
+        }
+    }
+
+    void parse_session_id(const XexOptHeader& opt_header, Xex2& xex) {
+        if (opt_header.data.size() >= sizeof(uint32_t)) {
+            std::memcpy(&xex.session_id, opt_header.data.data(), sizeof(uint32_t));
+        }
+    }
+
+    void parse_encryption_key(const XexOptHeader& opt_header, Xex2& xex) {
+        if (opt_header.data.size() >= sizeof(xex.encryption_key)) {
+            std::memcpy(xex.encryption_key.data(), opt_header.data.data(), sizeof(xex.encryption_key));
+        }
+    }
+
+    void parse_alternate_title_ids(const XexOptHeader& opt_header, Xex2& xex) {
+        if (opt_header.data.size() >= sizeof(uint16_t)) {
+            std::memcpy(&xex.alternate_title_ids.title_count, opt_header.data.data(), sizeof(uint16_t));
+            size_t offset = sizeof(uint16_t);
+
+            for (uint16_t i = 0; i < xex.alternate_title_ids.title_count; i++) {
+                if (offset + sizeof(uint32_t) <= opt_header.data.size()) {
+                    uint32_t title_id;
+                    std::memcpy(&title_id, opt_header.data.data() + offset, sizeof(uint32_t));
+                    xex.alternate_title_ids.title_ids.push_back(title_id);
+                    offset += sizeof(uint32_t);
+                }
+            }
+        }
+    }
+
+    void parse_lan_key(const XexOptHeader& opt_header, Xex2& xex) {
+        if (opt_header.data.size() >= sizeof(xex.lan_key)) {
+            std::memcpy(xex.lan_key.data(), opt_header.data.data(), sizeof(xex.lan_key));
+        }
+    }
+
+    void parse_xbox360_logo(const XexOptHeader& opt_header, Xex2& xex) {
+        xex.xbox360_logo = opt_header.data;
+    }
+
+    void parse_xbox1_logo(const XexOptHeader& opt_header, Xex2& xex) {
+        xex.xbox1_logo = opt_header.data;
+    }
+
+    void parse_online_service_ids(const XexOptHeader& opt_header, Xex2& xex) {
+        if (opt_header.data.size() >= sizeof(uint16_t)) {
+            std::memcpy(&xex.service_id_list.service_count, opt_header.data.data(), sizeof(uint16_t));
+            size_t offset = sizeof(uint16_t);
+
+            for (uint16_t i = 0; i < xex.service_id_list.service_count; i++) {
+                if (offset + sizeof(uint32_t) <= opt_header.data.size()) {
+                    uint32_t service_id;
+                    std::memcpy(&service_id, opt_header.data.data() + offset, sizeof(uint32_t));
+                    xex.service_id_list.service_ids.push_back(service_id);
+                    offset += sizeof(uint32_t);
+                }
+            }
+        }
+    }
+
+    void parse_device_id_key(const XexOptHeader& opt_header, Xex2& xex) {
+        if (opt_header.data.size() >= sizeof(xex.device_id_key)) {
+            std::memcpy(xex.device_id_key.data(), opt_header.data.data(), sizeof(xex.device_id_key));
+        }
+    }
+
+    void parse_stack_info(const XexOptHeader& opt_header, Xex2& xex) {
+        if (opt_header.data.size() >= sizeof(XexStackInfo)) {
+            std::memcpy(&xex.stack_info, opt_header.data.data(), sizeof(XexStackInfo));
+        }
+    }
+
+    void parse_original_pe_name(const XexOptHeader& opt_header, Xex2& xex) {
+        xex.original_pe_name.assign(opt_header.data.begin(), opt_header.data.end());
+    }
+
+    void parse_original_file_name(const XexOptHeader& opt_header, Xex2& xex) {
+        xex.original_file_name.assign(opt_header.data.begin(), opt_header.data.end());
+    }
+
+    void parse_original_file_sn(const XexOptHeader& opt_header, Xex2& xex) {
+        if (opt_header.data.size() >= sizeof(uint32_t)) {
+            std::memcpy(&xex.original_file_sn, opt_header.data.data(), sizeof(uint32_t));
+        }
+    }
+
+    void parse_original_unencrypted_hash(const XexOptHeader& opt_header, Xex2& xex) {
+        if (opt_header.data.size() >= sizeof(xex.original_unencrypted_hash)) {
+            std::memcpy(xex.original_unencrypted_hash.data(), opt_header.data.data(), sizeof(xex.original_unencrypted_hash));
         }
     }
 
