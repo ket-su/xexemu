@@ -8,7 +8,27 @@
 
 namespace xexemu {
 
-constexpr uint32_t XEX_MAGIC = 0x58455832;  // "XEX2"
+constexpr uint32_t XEX_MAGIC = 0x58455832;
+constexpr uint32_t RSA_SIGNATURE_SIZE = 256;
+constexpr uint32_t SHA1_HASH_SIZE = 20;
+constexpr uint32_t CERTIFICATE_MIN_SIZE = 288;
+constexpr uint32_t SYSTEM_VERSION = 17559;
+
+constexpr uint32_t SECURITY_HEADER_ENCRYPTED = 0x00010006;
+constexpr uint32_t SECURITY_HEADER_COMPRESSED = 0x00010005;
+
+constexpr uint8_t CERTIFICATE_TYPE_STANDARD = 0x00;
+constexpr uint8_t CERTIFICATE_TYPE_LIVE = 0x01;
+
+constexpr uint8_t TITLE_FLAG_SYSTEM = 0x08;
+
+constexpr uint8_t EXECUTABLE_TYPE_SYSTEM = 0x01;
+
+constexpr uint16_t PLATFORM_XBOX360 = 0x0001;
+constexpr uint16_t PLATFORM_UNKNOWN = 0x0000;
+
+constexpr uint32_t MEDIA_TYPE_HDD = 0x01;
+constexpr uint32_t MEDIA_TYPE_DVD_X2 = 0x02;
 
 enum class XexHeaderFlags : uint32_t {
     None = 0,

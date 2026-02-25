@@ -19,11 +19,11 @@ struct RsaPublicKey {
 class CryptoUtils {
 public:
     static bool verify_rsa_signature(const std::vector<uint8_t>& data, const std::vector<uint8_t>& signature, const RsaPublicKey& key) {
-        if (signature.size() != 256) {
+        if (signature.size() != RSA_SIGNATURE_SIZE) {
             return false;
         }
 
-        if (key.modulus.size() != 256) {
+        if (key.modulus.size() != RSA_SIGNATURE_SIZE) {
             return false;
         }
 
@@ -78,14 +78,14 @@ public:
     }
 
     static bool verify_sha1_hash(const std::vector<uint8_t>& data, const std::vector<uint8_t>& hash) {
-        if (hash.size() != 20) {
+        if (hash.size() != SHA1_HASH_SIZE) {
             return false;
         }
 
-        unsigned char computed_hash[20];
+        unsigned char computed_hash[SHA1_HASH_SIZE];
         SHA1(data.data(), data.size(), computed_hash);
 
-        return std::memcmp(computed_hash, hash.data(), 20) == 0;
+        return std::memcmp(computed_hash, hash.data(), SHA1_HASH_SIZE) == 0;
     }
 };
 
@@ -95,9 +95,9 @@ namespace {
 RsaPublicKey get_xex_public_key(const std::array<uint8_t, 20>& key_id) {
     RsaPublicKey key;
     key.exponent = {0x01, 0x00, 0x01};
-    key.modulus.resize(256);
+    key.modulus.resize(RSA_SIGNATURE_SIZE);
 
-    static const uint8_t xex_key_0[256] = {
+    static const uint8_t xex_key_0[RSA_SIGNATURE_SIZE] = {
         0xBB, 0x4C, 0x76, 0x4E, 0xA8, 0x63, 0x77, 0x95, 0x71, 0x6E, 0x84, 0xB5, 0x6B, 0x23, 0x8A, 0xF3,
         0x84, 0xF8, 0xA8, 0x9B, 0x1F, 0x98, 0x7A, 0xD8, 0x5D, 0x9E, 0x6C, 0x7F, 0x7B, 0x0B, 0x6F, 0xF7,
         0x4D, 0xE2, 0x83, 0x7C, 0x1F, 0x9D, 0x5D, 0xD8, 0xD1, 0x28, 0x71, 0xB3, 0x2F, 0x0F, 0xA8, 0x3A,
@@ -116,7 +116,7 @@ RsaPublicKey get_xex_public_key(const std::array<uint8_t, 20>& key_id) {
         0x8F, 0x5F, 0x4F, 0xE7, 0x6D, 0x5F, 0xE2, 0x8F
     };
 
-    std::memcpy(key.modulus.data(), xex_key_0, 256);
+    std::memcpy(key.modulus.data(), xex_key_0, RSA_SIGNATURE_SIZE);
 
     return key;
 }
@@ -146,24 +146,24 @@ bool Xex2Validator::verify_hypervisor_signature() const {
 
 bool Xex2Validator::verify_kernel_load_checks() const {
     if (xex_.certificate.minimum_version > 0 && xex_.certificate.maximum_version > 0) {
-        uint32_t system_version = 17559;
+        uint32_t system_version = SYSTEM_VERSION;
         if (system_version < xex_.certificate.minimum_version || system_version > xex_.certificate.maximum_version) {
             throw VersionRestrictionException(xex_.certificate.minimum_version, xex_.certificate.maximum_version, system_version);
         }
     }
 
-    if (xex_.certificate.platform != 0) {
+    if (xex_.certificate.platform != PLATFORM_UNKNOWN) {
         throw CertificateValidationException("platform", "platform must be 0x0000");
     }
 
     uint32_t allowed_media = xex_.certificate.allowed_media;
-    if ((allowed_media & 0x01) == 0 && (allowed_media & 0x02) == 0) {
+    if ((allowed_media & MEDIA_TYPE_HDD) == 0 && (allowed_media & MEDIA_TYPE_DVD_X2) == 0) {
         throw MediaRestrictionException(allowed_media);
     }
 
     if (xex_.is_encrypted) {
         for (const auto& sec_header : xex_.security_headers) {
-            if (sec_header.id == 0x00010006) {
+            if (sec_header.id == SECURITY_HEADER_ENCRYPTED) {
                 break;
             }
         }
@@ -180,23 +180,23 @@ bool Xex2Validator::verify_kernel_load_checks() const {
 }
 
 bool Xex2Validator::verify_certificate_chain() const {
-    if (xex_.certificate.size < 288) {
+    if (xex_.certificate.size < CERTIFICATE_MIN_SIZE) {
         throw CertificateValidationException("size", "certificate size " + std::to_string(xex_.certificate.size) + " is below minimum 288 bytes");
     }
 
-    if (xex_.certificate.certificate_type != 0x00 && xex_.certificate.certificate_type != 0x01) {
+    if (xex_.certificate.certificate_type != CERTIFICATE_TYPE_STANDARD && xex_.certificate.certificate_type != CERTIFICATE_TYPE_LIVE) {
         throw CertificateValidationException("certificate_type", "invalid type 0x" + std::to_string(xex_.certificate.certificate_type));
     }
 
     uint8_t title_flags = xex_.certificate.title_flags;
-    bool is_system_title = (title_flags & 0x08) != 0;
+    bool is_system_title = (title_flags & TITLE_FLAG_SYSTEM) != 0;
 
-    if (is_system_title && xex_.certificate.executable_type != 0x01) {
+    if (is_system_title && xex_.certificate.executable_type != EXECUTABLE_TYPE_SYSTEM) {
         throw CertificateValidationException("executable_type", "system titles require type 0x01");
     }
 
     uint16_t platform = xex_.certificate.platform;
-    if (platform != 0x0001) {
+    if (platform != PLATFORM_XBOX360) {
         throw CertificateValidationException("platform", "invalid platform 0x" + std::to_string(platform));
     }
 
@@ -206,8 +206,8 @@ bool Xex2Validator::verify_certificate_chain() const {
 bool Xex2Validator::verify_media_restrictions() const {
     uint32_t allowed_media = xex_.certificate.allowed_media;
 
-    bool can_run_on_hdd = (allowed_media & 0x01) != 0;
-    bool can_run_on_dvd = (allowed_media & 0x02) != 0;
+    bool can_run_on_hdd = (allowed_media & MEDIA_TYPE_HDD) != 0;
+    bool can_run_on_dvd = (allowed_media & MEDIA_TYPE_DVD_X2) != 0;
 
     if (!can_run_on_hdd && !can_run_on_dvd) {
         return false;

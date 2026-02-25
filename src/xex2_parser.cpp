@@ -214,9 +214,9 @@ private:
 
     void process_security_headers(Xex2& xex) {
         for (const auto& sec_header : xex.security_headers) {
-            if (sec_header.id == 0x00010006) {
+            if (sec_header.id == SECURITY_HEADER_ENCRYPTED) {
                 xex.is_encrypted = true;
-            } else if (sec_header.id == 0x00010005) {
+            } else if (sec_header.id == SECURITY_HEADER_COMPRESSED) {
                 xex.is_compressed = true;
             }
         }
